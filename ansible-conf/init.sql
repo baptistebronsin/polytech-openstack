@@ -6,4 +6,14 @@ INSERT INTO adjectives VALUES
 ('baptiste', 'puant', FALSE),
 ('cyril', 'drôle', TRUE),
 ('cyril', 'intelligent', TRUE),
-('cyril', 'chauve', FALSE);
+('cyril', 'chauve', FALSE),
+('tristan', 'énergique', TRUE),
+('tristan', 'intelligent', TRUE),
+('tristan', 'musicien', TRUE),
+('tristan', 'dégaine de Paul Valérie', FALSE),
+('tristan', 'de gauche', FALSE),
+('tristan', 'petit', FALSE),
+('giada', 'étrangère', TRUE),
+('giada', 'extravertie', TRUE),
+('giada', 'souriante', TRUE),
+('giada', 'gentille', TRUE);
