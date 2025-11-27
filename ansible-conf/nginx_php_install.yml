@@ -7,17 +7,56 @@
     user: "debian"
 
   tasks:
+    - name: Install prerequisites for adding repositories
+      ansible.builtin.apt:
+        name:
+          - gnupg2
+          - lsb-release
+          - ca-certificates
+        state: present
+
+    - name: Download and add GPG key for Sury repository
+      ansible.builtin.get_url:
+        url: https://packages.sury.org/php/apt.gpg
+        dest: /etc/apt/trusted.gpg.d/php.gpg
+        mode: '0644'
+
+    - name: Add Sury repository for Debian
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/sury-php.list
+        content: |
+          deb https://packages.sury.org/php/ {{ ansible_distribution_release }} main
+        mode: '0644'
+
+    - name: Update APT package list
+      ansible.builtin.apt:
+        update_cache: yes
+
     - name: Install nginx
       apt:
         name: nginx
         state: latest
         update_cache: yes
 
-    - name: Add user to group root
-      user:
-        name: "{{ user }}"
-        groups: root
+    - name: Install PHP and PHP-FPM
+      ansible.builtin.apt:
+        name:
+          - "php{{ php_version }}-fpm"
+          - "php{{ php_version }}-cli"
+          - "php{{ php_version }}-common"
+          - "php{{ php_version }}-mysql"
+          - "php{{ php_version }}-curl"
+          - "php{{ php_version }}-gd"
+          - "php{{ php_version }}-mbstring"
+          - "php{{ php_version }}-xml"
+          - "php{{ php_version }}-zip"
         state: present
+
+    - name: Ensure PHP-FPM is running
+      systemd:
+        name: "php{{ php_version }}-fpm"
+        state: started
+        enabled: yes
 
     - name: Remove default nginx configuration
       file:
@@ -31,19 +70,23 @@
         owner: "{{ user }}"
         group: root
         mode: '0644'
+      notify: Restart Nginx
 
     - name: Enable website configuration
       file:
         src: /etc/nginx/sites-available/static-site-config.conf
         dest: /etc/nginx/sites-enabled/static-site-config.conf
         state: link
+      notify: Restart Nginx
 
-    - name: Ensure nginx is running
-      systemd:
-        name: nginx
-        state: started
-        enabled: yes
-    
+    - name: Set correct permissions for web directory
+      file:
+        path: /var/www/html/
+        owner: "{{ user }}"
+        group: www-data
+        mode: '0755'
+        recurse: yes
+
     - name: Copy web page to server
       copy:
         src: "./web-pages/{{ inventory_hostname }}/"
@@ -51,9 +94,15 @@
         owner: "{{ user }}"
         group: "{{ user }}"
         mode: '0755'
+      notify: Restart Nginx
 
   handlers:
     - name: Restart Nginx
       ansible.builtin.service:
         name: nginx
+        state: restarted
+
+    - name: Restart PHP-FPM
+      ansible.builtin.service:
+        name: "php{{ php_version }}-fpm"
         state: restarted
