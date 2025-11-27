@@ -1,0 +1,74 @@
+# ansible-playbook -i inventory.ini postgresql_install.yml
+---
+- name: Install and configure PostgreSQL
+  hosts: databases
+  become: yes
+  vars:
+    postgres_version: 17
+    postgres_user: "cyril"
+    postgres_password: "lopez"
+    postgres_db: "cyril_db"
+
+  tasks:
+    - name: Update APT package list
+      ansible.builtin.apt:
+        update_cache: yes
+
+    - name: Install PostgreSQL
+      ansible.builtin.apt:
+        name:
+          - postgresql
+          - postgresql-contrib
+          - "postgresql-{{ postgres_version }}"
+        state: present
+
+    - name: Ensure PostgreSQL is running
+      ansible.builtin.service:
+        name: postgresql
+        state: started
+        enabled: yes
+
+    - name: Create PostgreSQL user and database
+      ansible.builtin.shell: |
+        sudo -u postgres psql -c "CREATE USER {{ postgres_user }} WITH PASSWORD '{{ postgres_password }}' CREATEDB LOGIN;"
+        sudo -u postgres psql -c "CREATE DATABASE {{ postgres_db }} OWNER {{ postgres_user }};"
+      become: yes
+      ignore_errors: yes
+
+    - name: Create 'adjectives' table
+      ansible.builtin.shell: |
+        sudo -u postgres psql -d "{{ postgres_db }}" -c "
+        CREATE TABLE IF NOT EXISTS adjectives (
+            person_name VARCHAR(50) NOT NULL,
+            adjective VARCHAR(50) NOT NULL,
+            is_positive BOOLEAN NOT NULL,
+            PRIMARY KEY (person_name, adjective)
+        );"
+      become: yes
+
+    - name: Grant all privileges on database and tables to user
+      ansible.builtin.shell: |
+        sudo -u postgres psql -d "{{ postgres_db }}" -c "GRANT ALL PRIVILEGES ON DATABASE {{ postgres_db }} TO {{ postgres_user }};"
+        sudo -u postgres psql -d "{{ postgres_db }}" -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{ postgres_user }};"
+        sudo -u postgres psql -d "{{ postgres_db }}" -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{ postgres_user }};"
+      become: yes
+
+    - name: Allow remote connections
+      ansible.builtin.lineinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/postgresql.conf"
+        regexp: "^#?listen_addresses"
+        line: "listen_addresses = '*'"
+      notify: Restart PostgreSQL
+
+    - name: Configure pg_hba.conf for remote access
+      ansible.builtin.lineinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
+        line: "host    all             all             0.0.0.0/0               scram-sha-256"
+        insertafter: EOF
+      notify: Restart PostgreSQL
+
+  handlers:
+    - name: Restart PostgreSQL
+      ansible.builtin.service:
+        name: postgresql
+        state: restarted

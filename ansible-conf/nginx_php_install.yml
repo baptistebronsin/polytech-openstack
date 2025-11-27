@@ -1,6 +1,7 @@
+# ansible-playbook -i inventory.ini nginx_php_install.yml
 ---
 - name: Install and configure Nginx with PHP
-  hosts: all
+  hosts: webservers
   become: yes
   vars:
     php_version: "8.5"
@@ -50,6 +51,7 @@
           - "php{{ php_version }}-mbstring"
           - "php{{ php_version }}-xml"
           - "php{{ php_version }}-zip"
+          - "php{{ php_version }}-pgsql"
         state: present
 
     - name: Ensure PHP-FPM is running
