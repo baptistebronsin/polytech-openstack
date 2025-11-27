@@ -1,0 +1,59 @@
+---
+- name: Install and configure Nginx with PHP
+  hosts: all
+  become: yes
+  vars:
+    php_version: "8.5"
+    user: "debian"
+
+  tasks:
+    - name: Install nginx
+      apt:
+        name: nginx
+        state: latest
+        update_cache: yes
+
+    - name: Add user to group root
+      user:
+        name: "{{ user }}"
+        groups: root
+        state: present
+
+    - name: Remove default nginx configuration
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+
+    - name: Add nginx configuration
+      copy:
+        src: ./static-site-config.conf
+        dest: /etc/nginx/sites-available/static-site-config.conf
+        owner: "{{ user }}"
+        group: root
+        mode: '0644'
+
+    - name: Enable website configuration
+      file:
+        src: /etc/nginx/sites-available/static-site-config.conf
+        dest: /etc/nginx/sites-enabled/static-site-config.conf
+        state: link
+
+    - name: Ensure nginx is running
+      systemd:
+        name: nginx
+        state: started
+        enabled: yes
+    
+    - name: Copy web page to server
+      copy:
+        src: "./web-pages/{{ inventory_hostname }}/"
+        dest: /var/www/html/
+        owner: "{{ user }}"
+        group: "{{ user }}"
+        mode: '0755'
+
+  handlers:
+    - name: Restart Nginx
+      ansible.builtin.service:
+        name: nginx
+        state: restarted
