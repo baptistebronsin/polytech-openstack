@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Les pensées de Baptiste</title>
+        <title>Les pensées de Baptiste 2</title>
     </head>
     <body>
         <p>Vous êtes curieux de savoir ce que je pense sur une personne ? Tentez votre chance ci-dessous.</p>
@@ -17,7 +17,7 @@
 
         <?php
         // Paramètres de connexion à la base de données
-        $host = "162.38.112.47";
+        $host = "192.168.22.67";
         $dbname = "cyril_db";
         $user = "cyril";
         $password = "lopez";
