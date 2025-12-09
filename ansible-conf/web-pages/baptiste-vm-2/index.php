@@ -17,7 +17,7 @@
 
         <?php
         // Paramètres de connexion à la base de données
-        $host = "192.168.22.67";
+        $host = "192.168.22.154";
         $dbname = "cyril_db";
         $user = "cyril";
         $password = "lopez";

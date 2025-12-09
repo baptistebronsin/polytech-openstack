@@ -4,14 +4,15 @@ This repository contains configuration files and scripts used in the OpenStack C
 
 ## Contents
 
-- lb_template.yaml: CloudFormation template for load balancer setup.
+- open_stack_template.yaml: CloudFormation template to setup OpenStack resources.
 - ansible-conf/: Directory containing Ansible configuration files.
 
 ## Usage
 
-2. Since the machines are ready, you can directly use Ansible to configure them. Navigate to the `ansible-conf` directory and follow the instructions in the README file located there.
-3. Deploy the CloudFormation stack using the provided `lb_template.yaml` file to set up the load balancer.
+1. Connect to your OpenStack environment.
+2. Provide the OpenStack resources using the `open_stack_template.yaml` CloudFormation template.
    ```bash
-   openstack stack create -t lb_template.yaml --parameter subnet_id=cc02caa5-54e9-404f-bb24-da0e8a0b3dc7 --parameter member_ip=192.168.22.5 baptiste_loadbalancer
+   openstack stack create -t open_stack_template.yaml --parameter image=debian-13 --parameter flavor=m1.medium --parameter key_name=<SSH-KEY-NAME> --parameter external_network=public baptiste-stack
    ```
-    **Note:** Replace the `subnet_id` and `member_ip` parameters with values appropriate for your OpenStack environment.
+   **Note:** Replace `<SSH-KEY-NAME>` with the name of your SSH key pair in OpenStack.
+3. Since the machines are ready, you can directly use Ansible to configure them. Navigate to the `ansible-conf` directory and follow the instructions in the README file located there.

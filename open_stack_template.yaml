@@ -1,0 +1,233 @@
+# openstack stack create -t open_stack_template.yaml --parameter image=debian-13 --parameter flavor=m1.medium --parameter key_name=baptiste-macbook --parameter external_network=public baptiste-stack
+heat_template_version: 2015-04-30
+
+description: Complete deploy with network, 3 VMs and a load balancer
+
+parameters:
+  image:
+    type: string
+    description: Image for the VMs
+    default: debian-13
+  
+  flavor:
+    type: string
+    description: Flavor for the VMs
+    default: m1.medium
+  
+  key_name:
+    type: string
+    description: SSH key name to access the VMs
+  
+  external_network:
+    type: string
+    description: External network for the router
+    default: public
+
+resources:
+  # ========================================
+  # NETWORK AND SUBNET
+  # ========================================
+  
+  # Create the private network
+  private_network:
+    type: OS::Neutron::Net
+    properties:
+      name: baptiste-network
+
+  # Create the subnet
+  private_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name: baptiste-subnet
+      network: { get_resource: private_network }
+      cidr: 192.168.22.0/24
+      gateway_ip: 192.168.22.1
+      dns_nameservers:
+        - 8.8.8.8
+        - 8.8.4.4
+      ip_version: 4
+
+  # Create the router
+  router:
+    type: OS::Neutron::Router
+    properties:
+      name: baptiste-router
+      external_gateway_info:
+        network: { get_param: external_network }
+
+  # Connect the router to the subnet
+  router_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router: { get_resource: router }
+      subnet: { get_resource: private_subnet }
+
+  # Security group
+  security_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: baptiste-security-group
+      description: Authorized access security group
+      rules:
+        - protocol: tcp
+          port_range_min: 22
+          port_range_max: 22
+          remote_ip_prefix: 0.0.0.0/0
+        - protocol: tcp
+          port_range_min: 80
+          port_range_max: 80
+          remote_ip_prefix: 0.0.0.0/0
+        - protocol: icmp
+          remote_ip_prefix: 0.0.0.0/0
+
+  # ========================================
+  # CREATE VMS
+  # ========================================
+
+  # VM 1
+  web_server_1:
+    type: OS::Nova::Server
+    properties:
+      name: baptiste-web-1
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      key_name: { get_param: key_name }
+      networks:
+        - network: { get_resource: private_network }
+      security_groups:
+        - { get_resource: security_group }
+    depends_on: 
+      - private_subnet
+      - router_interface
+
+  # VM 2
+  web_server_2:
+    type: OS::Nova::Server
+    properties:
+      name: baptiste-web-2
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      key_name: { get_param: key_name }
+      networks:
+        - network: { get_resource: private_network }
+      security_groups:
+        - { get_resource: security_group }
+    depends_on: 
+      - private_subnet
+      - router_interface
+
+  # VM 3
+  db_server_1:
+    type: OS::Nova::Server
+    properties:
+      name: baptiste-db-1
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      key_name: { get_param: key_name }
+      networks:
+        - network: { get_resource: private_network }
+      security_groups:
+        - { get_resource: security_group }
+    depends_on: 
+      - private_subnet
+      - router_interface
+
+  # ========================================
+  # LOAD BALANCER
+  # ========================================
+
+  loadbalancer:
+    type: OS::Octavia::LoadBalancer
+    properties:
+      vip_subnet: { get_resource: private_subnet }
+      name: baptiste-lb
+    depends_on:
+      - web_server_1
+      - web_server_2
+
+  listener:
+    type: OS::Octavia::Listener
+    properties:
+      loadbalancer: { get_resource: loadbalancer }
+      protocol: HTTP
+      protocol_port: 80
+      name: baptiste-listener
+    depends_on: loadbalancer
+
+  pool:
+    type: OS::Octavia::Pool
+    properties:
+      lb_algorithm: ROUND_ROBIN
+      protocol: HTTP
+      listener: { get_resource: listener }
+      name: baptiste-pool
+    depends_on: listener
+
+  # Add pool members (web servers)
+  pool_member_1:
+    type: OS::Octavia::PoolMember
+    properties:
+      pool: { get_resource: pool }
+      address: { get_attr: [web_server_1, first_address] }
+      protocol_port: 80
+      subnet: { get_resource: private_subnet }
+    depends_on: pool
+
+  pool_member_2:
+    type: OS::Octavia::PoolMember
+    properties:
+      pool: { get_resource: pool }
+      address: { get_attr: [web_server_2, first_address] }
+      protocol_port: 80
+      subnet: { get_resource: private_subnet }
+    depends_on: pool
+
+  health_monitor:
+    type: OS::Octavia::HealthMonitor
+    properties:
+      pool: { get_resource: pool }
+      type: HTTP
+      delay: 5
+      max_retries: 3
+      timeout: 5
+    depends_on: pool
+
+  # Floating IP to access the LB from outside
+  floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: { get_param: external_network }
+      port_id: { get_attr: [loadbalancer, vip_port_id] }
+    depends_on: loadbalancer
+
+# ========================================
+# OUTPUTS
+# ========================================
+outputs:
+  lb_vip_internal:
+    description: Internal IP address of the load balancer
+    value: { get_attr: [loadbalancer, vip_address] }
+  
+  lb_vip_external:
+    description: Public IP address of the load balancer
+    value: { get_attr: [floating_ip, floating_ip_address] }
+  
+  web_server_1_ip:
+    description: IP address of web server 1
+    value: { get_attr: [web_server_1, first_address] }
+  
+  web_server_2_ip:
+    description: IP address of web server 2
+    value: { get_attr: [web_server_2, first_address] }
+  
+  db_server_1_ip:
+    description: IP address of web server 3
+    value: { get_attr: [db_server_1, first_address] }
+  
+  access_url:
+    description: URL to access the application
+    value:
+      str_replace:
+        template: http://$ip
+        params:
+          $ip: { get_attr: [floating_ip, floating_ip_address] }
